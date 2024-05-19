@@ -327,7 +327,7 @@ def get_numbersCommand(update: Update, context):
 #получение логов о репликации
 def get_logsCommand(update: Update, context):
     logger.info("Пользователь %s запросил логи о репликации.", update.effective_user.full_name)
-    command = "cat /bot/postgreslogs/postgresql.log | grep 'repl' | tail -n 40"
+    command = "cat /var/log/postgresql/postgresql.log | grep 'repl' | tail -n 40"
     res = subprocess.run(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     if res.returncode != 0 or res.stderr.decode() != "":
         logger.error("Ошибка при выводе логов репликации: %s", res.stderr.decode())
