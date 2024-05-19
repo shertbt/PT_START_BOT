@@ -1,0 +1,126 @@
+- name: PostgreSQL
+  hosts: databases
+  become: yes
+ 
+  tasks:
+    - name: Installing PostgreSQL
+      apt:
+        name:
+          - postgresql-16
+          - postgresql-contrib-16
+    
+    - name: Upload.pgpass
+      become_user: postgres
+      copy:
+        src: .pgpass
+        dest: /var/lib/postgresql/.pgpass
+        mode: 0600
+        
+- name: Setting up Master Server
+  hosts: db
+  vars_files:
+    - vars.yml
+  become: yes
+  tasks:
+    - name: Start PostgreSQL
+      service:
+        name: postgresql
+        state: started
+
+    - name: Create replication user
+      become_user: postgres
+      shell: psql -c "CREATE USER {{ DB_REPL_USER }} WITH REPLICATION ENCRYPTED PASSWORD '{{ DB_REPL_PASSWORD }}';"
+
+    - name: Create database 
+      become_user: postgres
+      shell: psql -c "CREATE DATABASE {{ DB_DATABASE }};"
+
+    - name: Create tables
+      become_user: postgres
+      shell: |
+        psql -d {{ DB_DATABASE }} -c "CREATE TABLE IF NOT EXISTS emails(ID SERIAL PRIMARY KEY, address VARCHAR(255) NOT NULL);"
+        psql -d {{ DB_DATABASE }} -c "CREATE TABLE IF NOT EXISTS phones(ID SERIAL PRIMARY KEY, number VARCHAR(100) NOT NULL);"
+        psql -d {{ DB_DATABASE }} -c "INSERT INTO emails (address) VALUES ('123qwerty@test.com'), ('ANNA2@yandex.ru');"
+        psql -d {{ DB_DATABASE }} -c "INSERT INTO phones (number) VALUES ('89617891234'), ('+7-913-684-31-55');"
+    
+    - name: Change passwd
+      become_user: postgres
+      shell: |
+        psql -d {{ DB_DATABASE }} -c "ALTER ROLE postgres PASSWORD '{{ DB_PASSWD }}';"
+
+    - name: Copy postgresql.conf
+      template:
+        src: postgresql.conf
+        dest: /etc/postgresql/16/main/postgresql.conf
+    
+    - name: Copy pg_hba.conf
+      template:
+        src: pg_hba.conf
+        dest: /etc/postgresql/16/main/pg_hba.conf
+
+    - name: Create archive dir
+      shell: |
+        mkdir -p /oracle/pg_data/archive/
+        chown -R "{{ DB_USER }}" /oracle/pg_data/archive/
+       
+    - name: Restart PostgreSQL
+      service:
+        name: postgresql
+        state: restarted
+
+- name:  Setting up Slave Server
+  hosts: db_repl
+  become: yes
+
+  tasks:
+    - name: Stop PostgreSQL
+      service:
+        name: postgresql
+        state: stopped
+    
+    - name: Add listen address
+      lineinfile:
+        path: /etc/postgresql/16/main/postgresql.conf
+        line: "listen_addresses='localhost, {{ hostvars['db_repl']['ansible_host'] }}'"
+
+    - name: Removing files
+      become_user: postgres
+      shell: rm -rf /var/lib/postgresql/16/main/*
+    
+    - name: Running pg_basebackup
+      become_user: postgres
+      shell: pg_basebackup -R -h {{ hostvars['db']['ansible_host'] }} -U repl_user -D /var/lib/postgresql/16/main
+    
+    - name: Start PostgreSQL
+      service:
+        name: postgresql
+        state: started
+
+- name: Starting bot
+  hosts: tg_bot
+  become: yes
+
+  tasks:
+    - name: Install Python
+      apt:
+        name:
+          - python3
+
+    - name: Clone repository
+      git:
+        repo: https://github.com/shertbt/PT_START_BOT.git
+        dest: /home/kali/PT_START_BOT
+        clone: yes
+        update: yes
+
+    - name: Install requirements.txt
+      pip:
+        requirements: /home/kali/PT_START_BOT/bot/requirements.txt
+    
+    - name: Copy .env
+      copy:
+        src: .env
+        dest: /home/kali/PT_START_BOT/bot/.env
+
+    - name: Start bot
+      command: "python3 /home/kali/PT_START_BOT/bot/bot.py"

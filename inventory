@@ -1,0 +1,4 @@
+tg_bot ansible_host=192.168.171.149 ansible_user=ansible ansible_password=ansible
+[databases]
+db ansible_host=192.168.171.149 ansible_user=ansible ansible_password=ansible
+db_repl ansible_host=192.168.171.150 ansible_user=ansible ansible_password=ansible

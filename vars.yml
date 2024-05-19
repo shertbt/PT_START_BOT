@@ -1,0 +1,5 @@
+DB_DATABASE: db_for_bot
+DB_USER: postgres
+DB_PASSWD: Qq12345
+DB_REPL_USER: repl_user
+DB_REPL_PASSWORD: replicator_password
